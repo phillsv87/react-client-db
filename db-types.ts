@@ -13,12 +13,15 @@ export interface IHttp
     deleteAsync:<T>(path:string,data?:any)=>Promise<T>;
 }
 
+export type EndPointBuilder=(collection:string,id:IdParam)=>string;
+
 export interface DbConfig
 {
     databaseName?:string;
     crudPrefix?:string;
     primaryKey?:string;
     getPrimaryKey?:((collection:string)=>string)|null;
+    endPointMap?:{[collection:string]:string|EndPointBuilder};
 }
 
 export interface DbRecord

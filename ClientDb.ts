@@ -10,7 +10,8 @@ const defaultConfig:Required<DbConfig>={
     databaseName:'client-db.db',
     crudPrefix:'',
     primaryKey:'Id',
-    getPrimaryKey:null
+    getPrimaryKey:null,
+    endPointMap:{}
 }
 
 
@@ -280,7 +281,22 @@ export default class ClientDb
 
     }
 
-    public resetAsync(collection:string,id:IdParam):Promise<void>
+    public async setAsync(collection:string,obj:any):Promise<void>
+    {
+        await this.setRecordsAsync([{
+            expires:0,
+            collection,
+            objId:this.getPrimaryKey(collection,obj),
+            obj:obj||null
+        }])
+    }
+
+    public newAsync(collection:string,id:IdParam):Promise<void>
+    {
+        return this.removeRecordAsync(collection,id,'reset');
+    }
+
+    public updateAsync(collection:string,id:IdParam):Promise<void>
     {
         return this.removeRecordAsync(collection,id,'reset');
     }
@@ -290,27 +306,37 @@ export default class ClientDb
         return this.removeRecordAsync(collection,id,'delete');
     }
 
-    public async getObjAsync<T>(collection:string,id:IdParam):Promise<T|null>
+    private getEndPoint(collection:string,id:IdParam,property?:string)
     {
-        if(id===null || id===undefined){
-            return null;
-        }
+        const custom=this.config.endPointMap[collection];
+        const customStr=typeof custom === 'function'?custom(collection,id):custom;
+        return (customStr||this.config.crudPrefix+collection+(id===undefined || id===null?'':'/'+id))+
+            (property?'/'+property:'');
+    }
 
-        const cached=await this.findLocalRecordAsync(collection,id);
-        if(cached && !isExpired(cached)){
-            return cached.obj;
-        }
+    public getObjAsync<T>(collection:string,id:IdParam):Promise<T|null>
+    {
+        return this.syncAsync<T|null>(['getObjAsync',collection,id],async ()=>{
+            if(id===null || id===undefined){
+                return null;
+            }
 
-        const obj=await this.http.getAsync<T>(this.config.crudPrefix+collection+'/'+id);
+            const cached=await this.findLocalRecordAsync(collection,id);
+            if(cached && !isExpired(cached)){
+                return cached.obj;
+            }
 
-        await this.setRecordsAsync([{
-            expires:0,
-            collection,
-            objId:id.toString(),
-            obj:obj||null
-        }])
+            const obj=await this.http.getAsync<T>(this.getEndPoint(collection,id));
 
-        return obj||null;
+            await this.setRecordsAsync([{
+                expires:0,
+                collection,
+                objId:id.toString(),
+                obj:obj||null
+            }])
+
+            return obj||null;
+        });
     }
 
     public getObjRefCollection<T,TRef>(
@@ -347,67 +373,95 @@ export default class ClientDb
         isCollection:boolean)
         :Promise<TRef|TRef[]|null>
     {
-        if(id===null || id===undefined){
-            return null;
-        }
+        return this.syncAsync<TRef|TRef[]|null>(
+        ['getObjRef',collection,id,refCollection,property,foreignKey,isCollection],
+        async ()=>{
 
-        const refFlag=`${collection}:REF:${property}`;
-
-        const cached=await this.findLocalRecordAsync(refFlag,id);
-        if(cached && !isExpired(cached)){
-            const val=
-                isCollection?
-                await this.findLocalRefCollectionAsync(refCollection,foreignKey as string,id,cached.obj):
-                await this.findLocalRefSingleAsync(collection,refCollection,foreignKey as string,id,cached.obj);
-            if(val){
-                return val;
+            if(id===null || id===undefined){
+                return null;
             }
-            // if no ary the items do not match and need refreshed
-            await this.deleteAsync(refFlag,id);
-        }
 
-        const objResult=await this.http.getAsync<TRef[]|TRef>(this.config.crudPrefix+collection+'/'+id+'/'+property);
+            const refFlag=`${collection}:REF:${property}`;
 
-        if(!objResult){
-            return null;
-        }
+            const cached=await this.findLocalRecordAsync(refFlag,id);
+            if(cached && !isExpired(cached)){
+                const val=
+                    isCollection?
+                    await this.findLocalRefCollectionAsync(refCollection,foreignKey as string,id,cached.obj):
+                    await this.findLocalRefSingleAsync(collection,refCollection,foreignKey as string,id,cached.obj);
+                if(val){
+                    return val;
+                }
+                // if no ary the items do not match and need refreshed
+                await this.deleteAsync(refFlag,id);
+            }
 
-        const isAry=Array.isArray(objResult);
-        if(isAry && !isCollection){
-            throw new Error('Mismatch isCollection');
-        }
+            const objResult=await this.http.getAsync<TRef[]|TRef>(this.getEndPoint(collection,id,property));
 
-        const records:DbMemRecord[]=isAry?
-            (objResult as TRef[]).map<DbMemRecord>(obj=>({
+            if(!objResult){
+                return null;
+            }
+
+            const isAry=Array.isArray(objResult);
+            if(isAry && !isCollection){
+                throw new Error('Mismatch isCollection');
+            }
+
+            const records:DbMemRecord[]=isAry?
+                (objResult as TRef[]).map<DbMemRecord>(obj=>({
+                    expires:0,
+                    collection:refCollection,
+                    objId:this.getPrimaryKey(refCollection,obj),
+                    obj:obj||null
+                }))
+            :
+                [{
+                    expires:0,
+                    collection:refCollection,
+                    objId:this.getPrimaryKey(refCollection,objResult),
+                    obj:objResult||null
+                }]
+
+            const collectionRef:DbRecordRef={
+                ids:isAry?(objResult as TRef[]).map(o=>this.getPrimaryKey(refCollection,o)):undefined,
+                id:!isAry?this.getPrimaryKey(refCollection,objResult):undefined
+            }
+
+            records.push({
                 expires:0,
-                collection:refCollection,
-                objId:this.getPrimaryKey(refCollection,obj),
-                obj:obj||null
-            }))
-        :
-            [{
-                expires:0,
-                collection:refCollection,
-                objId:this.getPrimaryKey(refCollection,objResult),
-                obj:objResult||null
-            }]
+                collection:refFlag,
+                objId:id.toString(),
+                obj:collectionRef
+            });
 
-        const collectionRef:DbRecordRef={
-            ids:isAry?(objResult as TRef[]).map(o=>this.getPrimaryKey(refCollection,o)):undefined,
-            id:!isAry?this.getPrimaryKey(refCollection,objResult):undefined
-        }
+            await this.setRecordsAsync(records)
 
-        records.push({
-            expires:0,
-            collection:refFlag,
-            objId:id.toString(),
-            obj:collectionRef
+            return objResult||null;
         });
+    }
 
-        await this.setRecordsAsync(records)
 
-        return objResult||null;
+    private readonly syncMap:{[key:string]:Promise<any>}={}
+    private async syncAsync<T>(deps:any[],getAsync:()=>Promise<T>):Promise<T>
+    {
+        let key='';
+        for(const k of deps){
+            key+='::'+k;
+        }
+        let p=this.syncMap[key];
+        if(p as any){
+            return await p;
+        }
 
+        try{
+            p=getAsync();
+            this.syncMap[key]=p;
+            return await p;
+        }finally{
+
+            delete this.syncMap[key];
+
+        }
     }
 
     private async findLocalRefCollectionAsync(

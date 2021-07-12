@@ -93,7 +93,7 @@ export function useObjCollectionRef<T,TRef>(
         get();
 
         const strId=id?.toString();
-        const listener=(type:ObjEventType,eCollection:string,eId:string)=>{
+        const listener=(type:ObjEventType,eCollection:string,eId:string,obj:any)=>{
 
             if(!m){
                 return;
@@ -108,7 +108,7 @@ export function useObjCollectionRef<T,TRef>(
                     setObj(undefined);
                 }
             }else if(eCollection===refCollection && objs){
-                if(ids?.includes(eId)){
+                if(ids?.includes(eId) || obj?.[foreignKey]===id){
                     get();
                 }
             }
