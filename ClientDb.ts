@@ -4,6 +4,8 @@ import { ResultSet, ResultSetError, SQLError, SQLResultSet, SQLTransaction, WebS
 import React from "react";
 import { FileSystem } from "react-native-unimodules";
 
+const dbSchemaVersion='1';
+
 const toKey=(collection:string,id:string|number)=>collection+':'+id;
 
 const defaultConfig:Required<DbConfig>={
@@ -14,6 +16,13 @@ const defaultConfig:Required<DbConfig>={
     endPointMap:{}
 }
 
+interface LoadedRef{
+    collection:string;
+    refCollection:string;
+    id:string;
+    isCollection:boolean;
+}
+
 
 export default class ClientDb
 {
@@ -21,7 +30,7 @@ export default class ClientDb
 
     private readonly memCache:{[key:string]:DbMemRecord}={}
 
-    private loadedRefs:{[key:string]:boolean}={}
+    private loadedRefs:{[key:string]:LoadedRef}={}
 
     private readonly writeLock:Lock=new Lock(1);
 
@@ -48,10 +57,25 @@ export default class ClientDb
     public async initAsync()
     {
         this.__db=SQLite.openDatabase(this.config.databaseName);
+
+        await this.execAsync(`
+            CREATE TABLE IF NOT EXISTS "settings"(
+                "name" VARCHAR(50) NOT NULL,
+                "value" TEXT NOT NULL
+            )
+        `);
+
+        const sv=await this.getSettingAsync('dbSchemaVersion');
+        if(sv!==dbSchemaVersion){
+            console.log(`Updating ClientDb dbSchemaVersion. ${sv||'(none)'} -> ${dbSchemaVersion}`)
+            await this.execAsync('DROP TABLE IF EXISTS "objs"');
+        }
+
         await this.execAsync([`
             CREATE TABLE IF NOT EXISTS "objs"(
                 "expires" INTEGER NOT NULL,
-                "collection" VARCHAR(100) NOT NULL,
+                "collection" VARCHAR(150) NOT NULL,
+                "refCollection" VARCHAR(100) NULL,
                 "objId" INTEGER NOT NULL,
                 "obj" TEXT
             )
@@ -59,6 +83,10 @@ export default class ClientDb
         `
             CREATE UNIQUE INDEX IF NOT EXISTS "objsIndex" ON "objs" ( "objId", "collection")
         `]);
+
+        if(sv!==dbSchemaVersion){
+            await this.setSettingAsync('dbSchemaVersion',dbSchemaVersion);
+        }
     }
 
     public addListener(listener:ObjListener)
@@ -74,9 +102,42 @@ export default class ClientDb
         }
     }
 
-    private callListeners(type:ObjEventType,collection:string,id:string,obj:any){
+    private callListeners(type:ObjEventType,collection:string,id:string,obj:any,includeRef:boolean){
         for(const l of this.listeners){
-            l(type,collection,id,obj);
+            l(type,collection,id,obj,includeRef);
+        }
+    }
+
+    private async getSettingAsync(name:string):Promise<string|null>
+    {
+        if(!name){
+            return null;
+        }
+        const r=await this.selectAsync(
+            'SELECT "value" from "settings" where "name" = ? LIMIT 1',
+            [name]);
+
+        return r.rows?.item(0)?.value||null;
+    }
+
+    private async setSettingAsync(name:string, value:string)
+    {
+        if(!name){
+            return;
+        }
+
+         const r=await this.selectAsync(
+            'SELECT "value" from "settings" where "name" = ? LIMIT 1',
+            [name]);
+
+        if(r.rows?.length){
+            await this.execAsync(
+                'UPDATE "settings" SET "value" = ? WHERE "name" = ?',
+                [value,name]);
+        }else{
+            await this.execAsync(
+                'INSERT INTO "settings" ("name","value") VALUES (?,?)',
+                [name,value]);
         }
     }
 
@@ -126,6 +187,7 @@ export default class ClientDb
                 }
             },
             (err:SQLError)=>{
+                console.log('execAsync error',exec,args)
                 error(err.message+' - code:'+err.code);
             },
             success)
@@ -174,8 +236,8 @@ export default class ClientDb
                     )
                 }else{
                     await this.execAsync(
-                        'INSERT INTO "objs" ("expires","collection","objId","obj") VALUES (?,?,?,?)',
-                        [record.expires,record.collection,record.objId,JSON.stringify(record.obj)]
+                        'INSERT INTO "objs" ("expires","collection","refCollection","objId","obj") VALUES (?,?,?,?,?)',
+                        [record.expires,record.collection,record.refCollection||'',record.objId,JSON.stringify(record.obj)]
                     )
                 }
             }
@@ -185,11 +247,11 @@ export default class ClientDb
             release();
         }
         for(const record of records){
-            this.callListeners('set',record.collection,record.objId,record.obj);
+            this.callListeners('set',record.collection,record.objId,record.obj,false);
         }
     }
 
-    private async removeRecordAsync(collection:string,id:IdParam,type:ObjEventType):Promise<void>
+    private async removeRecordAsync(collection:string,id:IdParam,includeRefs:boolean,type:ObjEventType):Promise<void>
     {
 
         if(id===undefined || id===null){
@@ -199,17 +261,41 @@ export default class ClientDb
         const release=await this.writeLock.waitAsync();
         try{
 
-            await this.execAsync(
-                'DELETE FROM "objs" WHERE "objId" = ? AND "collection" = ? LIMIT 1',
-                [id.toString(),collection]
-            )
+            if(includeRefs){
+                await this.execAsync(
+                    'DELETE FROM "objs" WHERE "objId" = ? AND ( "collection" = ? OR "refCollection" = ? )',
+                    [id.toString(),collection,collection]
+                )
+            }else{
+                await this.execAsync(
+                    'DELETE FROM "objs" WHERE "objId" = ? AND "collection" = ? LIMIT 1',
+                    [id.toString(),collection]
+                )
+            }
 
             delete this.memCache[toKey(collection,id)];
+
+            if(includeRefs){
+                const strId=id.toString();
+                for(const e in this.memCache){
+                    const r=this.memCache[e];
+                    if(r.refCollection===collection && r.objId===strId){
+                        delete this.memCache[e];
+                    }
+                }
+
+                for(const e in this.loadedRefs){
+                    const ld=this.loadedRefs[e];
+                    if(ld.isCollection && ld.refCollection===collection && ld.id===strId){
+                        delete this.loadedRefs[e];
+                    }
+                }
+            }
 
         }finally{
             release();
         }
-        this.callListeners(type,collection,id.toString(),undefined);
+        this.callListeners(type,collection,id.toString(),undefined,includeRefs);
     }
 
     public resetAllAsync():Promise<void>
@@ -241,7 +327,7 @@ export default class ClientDb
             release();
         }
 
-        this.callListeners(eventType,'','',undefined);
+        this.callListeners(eventType,'','',undefined,false);
     }
 
     private async findLocalRecordAsync(collection:string, id:IdParam):Promise<DbMemRecord|undefined>
@@ -272,6 +358,7 @@ export default class ClientDb
         const record:DbMemRecord={
             expires:row.expires,
             collection:row.collection,
+            refCollection:row.refCollection||null,
             objId:row.objId,
             obj:JSON.parse(row.obj)
         }
@@ -286,6 +373,7 @@ export default class ClientDb
         await this.setRecordsAsync([{
             expires:0,
             collection,
+            refCollection:null,
             objId:this.getPrimaryKey(collection,obj),
             obj:obj||null
         }])
@@ -293,17 +381,17 @@ export default class ClientDb
 
     public newAsync(collection:string,id:IdParam):Promise<void>
     {
-        return this.removeRecordAsync(collection,id,'reset');
+        return this.removeRecordAsync(collection,id,false,'reset');
     }
 
-    public updateAsync(collection:string,id:IdParam):Promise<void>
+    public updateAsync(collection:string,id:IdParam,includeRefs:boolean=false):Promise<void>
     {
-        return this.removeRecordAsync(collection,id,'reset');
+        return this.removeRecordAsync(collection,id,includeRefs,'reset');
     }
 
     public deleteAsync(collection:string,id:IdParam):Promise<void>
     {
-        return this.removeRecordAsync(collection,id,'delete');
+        return this.removeRecordAsync(collection,id,false,'delete');
     }
 
     private getEndPoint(collection:string,id:IdParam,property?:string)
@@ -331,6 +419,7 @@ export default class ClientDb
             await this.setRecordsAsync([{
                 expires:0,
                 collection,
+                refCollection:null,
                 objId:id.toString(),
                 obj:obj||null
             }])
@@ -387,7 +476,7 @@ export default class ClientDb
             if(cached && !isExpired(cached)){
                 const val=
                     isCollection?
-                    await this.findLocalRefCollectionAsync(refCollection,foreignKey as string,id,cached.obj):
+                    await this.findLocalRefCollectionAsync(refCollection,collection,foreignKey as string,id,cached.obj):
                     await this.findLocalRefSingleAsync(collection,refCollection,foreignKey as string,id,cached.obj);
                 if(val){
                     return val;
@@ -411,6 +500,7 @@ export default class ClientDb
                 (objResult as TRef[]).map<DbMemRecord>(obj=>({
                     expires:0,
                     collection:refCollection,
+                    refCollection:null,
                     objId:this.getPrimaryKey(refCollection,obj),
                     obj:obj||null
                 }))
@@ -418,6 +508,7 @@ export default class ClientDb
                 [{
                     expires:0,
                     collection:refCollection,
+                    refCollection:null,
                     objId:this.getPrimaryKey(refCollection,objResult),
                     obj:objResult||null
                 }]
@@ -430,6 +521,7 @@ export default class ClientDb
             records.push({
                 expires:0,
                 collection:refFlag,
+                refCollection:collection,
                 objId:id.toString(),
                 obj:collectionRef
             });
@@ -465,8 +557,12 @@ export default class ClientDb
     }
 
     private async findLocalRefCollectionAsync(
-        collection:string,foreignKey:string,id:IdParam,recordRef:DbRecordRef):Promise<any[]|null>
+        collection:string,refCollection:string,foreignKey:string,id:IdParam,recordRef:DbRecordRef):Promise<any[]|null>
     {
+
+        if(id===null || id===undefined){
+            return null;
+        }
 
         if(!recordRef.ids){
             throw new Error('recordRef.ids required');
@@ -510,6 +606,7 @@ export default class ClientDb
                         const record={
                             expires:item.expires,
                             collection:item.collection,
+                            refCollection:null,
                             objId:item.objId,
                             obj:JSON.parse(item.obj)
                         }
@@ -524,7 +621,13 @@ export default class ClientDb
                 }
             }
 
-            this.loadedRefs[refKey]=true;
+            this.loadedRefs[refKey]={
+                collection,
+                refCollection,
+                id:id?.toString(),
+                isCollection:true
+
+            };
         }
 
         if(count!==recordRef.ids.length){

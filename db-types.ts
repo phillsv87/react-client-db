@@ -28,6 +28,7 @@ export interface DbRecord
 {
     expires:number;// timestamp
     collection:string;// index
+    refCollection:string|null;
     objId:string;// index
     obj:string;// json
 }
@@ -36,6 +37,7 @@ export interface DbMemRecord
 {
     expires:number;// timestamp
     collection:string;// index
+    refCollection:string|null;
     objId:string;// index
     obj:any;
 }
@@ -63,4 +65,10 @@ export type ObjEventType=
     // This is a utility event used to clear the cache db.
     'clearAll';
 
-export type ObjListener=(type:ObjEventType,collection:string,id:string,obj:any)=>void;
+export type ObjListener=(type:ObjEventType,collection:string,id:string,obj:any,includeRefs:boolean)=>void;
+
+export interface DbSettingRecord
+{
+    name:string;
+    value:string;
+}
