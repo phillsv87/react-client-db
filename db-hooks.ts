@@ -46,7 +46,6 @@ export function useObj<T>(collection:string,id:IdParam):T|null|undefined
                 if(type==='set'){
                     setObj(obj);
                 }else if(type==='reset'){
-                    setObj(undefined);
                     get();
                 }else if(type==='delete'){
                     setObj(undefined);
@@ -62,6 +61,58 @@ export function useObj<T>(collection:string,id:IdParam):T|null|undefined
             db.removeListener(listener);
         }
     },[collection,id,db]);
+
+    return obj;
+}
+
+export function useMappedObj<T>(
+    enabled:boolean,
+    endpoint:string,
+    isCollection:boolean,
+    cacheKey:string|null,
+    cacheId:number|null,
+    collection:string)
+    :T|null|undefined
+{
+    const db=useClientDb();
+
+    const [obj,setObj]=useState<T|null|undefined>(undefined);
+
+    useEffect(()=>{
+        if(!enabled){
+            return;
+        }
+        let m=true;
+        setObj(undefined);
+        const get=async ()=>{
+            const obj=await db.getMappedObj<T>(endpoint,isCollection,cacheKey||endpoint,cacheId||1,collection);
+            if(m){
+                setObj(obj);
+            }
+        };
+        get();
+
+        const listener=(type:ObjEventType)=>{
+            if(!m){
+                return;
+            }
+            if(type==='clearAll'){
+                setObj(undefined);
+            }else if(type==='resetAll'){
+                setObj(undefined);
+                get();
+            }
+            // todo - maybe do something here
+        }
+
+        db.addListener(listener);
+
+
+        return ()=>{
+            m=false;
+            db.removeListener(listener);
+        }
+    },[enabled,endpoint,isCollection,cacheKey,cacheId,collection,db]);
 
     return obj;
 }
@@ -83,8 +134,8 @@ export function useObjCollectionRef<T,TRef>(
         setObj(undefined);
         let objs:TRef[]|null=null;
         let ids:string[]|null=null;
-        const get=async ()=>{
-            objs=await db.getObjRefCollection<T,TRef>(collection,id,refCollection,property,foreignKey);
+        const get=async (clearCache?:boolean)=>{
+            objs=await db.getObjRefCollection<T,TRef>(collection,id,refCollection,property,foreignKey,clearCache);
             ids=objs?.map(o=>db.getPrimaryKey(refCollection,o))||null;
             if(m){
                 setObj(objs);
@@ -111,7 +162,7 @@ export function useObjCollectionRef<T,TRef>(
                 }
             }else if(eCollection===refCollection && objs){
                 if(ids?.includes(eId) || obj?.[foreignKey]===id){
-                    get();
+                    get(true);
                 }
             }
         }
@@ -169,7 +220,6 @@ export function useObjSingleRef<T,TRef>(
             }else if(eCollection===collection && eId===strId){// baseObj.{fKey} -> (this).Id
                 if(type==='set' || type==='reset'){
                     // fKey could have changed to do full refresh
-                    setObj(undefined);
                     get();
                 }else if(type==='delete'){
                     setObj(undefined);
@@ -178,7 +228,6 @@ export function useObjSingleRef<T,TRef>(
                 if(type==='set'){
                     setObj(obj);
                 }else if(type==='reset'){
-                    setObj(undefined);
                     get();
                 }else if(type==='delete'){
                     setObj(undefined);
