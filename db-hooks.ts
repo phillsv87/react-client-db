@@ -85,7 +85,7 @@ export function useMappedObj<T>(
         let m=true;
         setObj(undefined);
         const get=async ()=>{
-            const obj=await db.getMappedObj<T>(endpoint,isCollection,cacheKey||endpoint,cacheId||1,collection);
+            const obj=await db.getMappedObj<T>(endpoint,isCollection,cacheKey||'MAPPED:'+endpoint,cacheId||1,collection);
             if(m){
                 setObj(obj);
             }

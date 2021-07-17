@@ -5,7 +5,7 @@ import React from "react";
 import { FileSystem } from "react-native-unimodules";
 
 const dbSchemaVersion='1';
-const dbDataStructure='1';
+const dbDataStructure='2';
 
 const toKey=(collection:string,id:string|number)=>collection+':'+id;
 
@@ -515,7 +515,7 @@ export default class ClientDb
         records.push({
             expires:0,
             collection:cacheKey,
-            refCollection:null,
+            refCollection:collection,
             objId:cacheId.toString(),
             obj:idRef
         });
@@ -674,7 +674,7 @@ export default class ClientDb
         let count=0;
         for(const e in this.memCache){
             const r=this.memCache[e];
-            if(r.collection===collection && recordRef.ids.includes(r.objId)){
+            if(r.collection===sourceCollection && recordRef.ids.includes(r.objId)){
                 if(map[r.objId]){
                     throw new Error('Duplicate mem cached key found. record.objId='+r.objId);
                 }
