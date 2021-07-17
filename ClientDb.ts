@@ -429,7 +429,7 @@ export default class ClientDb
             (property?'/'+property:'');
     }
 
-    public getObjAsync<T>(collection:string,id:IdParam):Promise<T|null>
+    public getObjAsync<T>(collection:string,id:IdParam,endpoint?:string):Promise<T|null>
     {
         return this.syncAsync<T|null>(['getObjAsync',collection,id],async ()=>{
             if(id===null || id===undefined){
@@ -441,7 +441,7 @@ export default class ClientDb
                 return cached.obj;
             }
 
-            const obj=await this.http.getAsync<T>(this.getEndPoint(collection,id));
+            const obj=await this.http.getAsync<T>(endpoint||this.getEndPoint(collection,id));
 
             await this.setRecordsAsync([{
                 expires:0,
@@ -455,7 +455,12 @@ export default class ClientDb
         });
     }
 
-    public async getMappedObj<T>(endpoint:string,isCollection:boolean,cacheKey:string,cacheId:number,collection:string):Promise<T|null>
+    public async getMappedObj<T>(
+        endpoint:string,
+        isCollection:boolean,
+        cacheKey:string,
+        cacheId:number,
+        collection:string):Promise<T|null>
     {
 
         const cached=await this.findLocalRecordAsync(cacheKey,cacheId);
@@ -527,15 +532,34 @@ export default class ClientDb
     }
 
     public getObjRefCollection<T,TRef>(
-        collection:string,id:IdParam,refCollection:string,property:keyof(T)|string,foreignKey:keyof(TRef),clearCache?:boolean)
+        collection:string,
+        id:IdParam,
+        refCollection:string,
+        property:keyof(T)|string,
+        foreignKey:keyof(TRef),
+        clearCache?:boolean,
+        endpoint?:string)
         :Promise<TRef[]|null>
     {
-        return this.getObjRef<T,TRef>(collection,id,refCollection,property as string,foreignKey as string,true,clearCache) as Promise<TRef[]|null>;
+        return this.getObjRef<T,TRef>(
+            collection,
+            id,
+            refCollection,
+            property as string,
+            foreignKey as string,
+            true,
+            clearCache,
+            endpoint) as Promise<TRef[]|null>;
 
     }
 
     public getObjRefSingle<T,TRef>(
-        collection:string,id:IdParam,refCollection:string,property:keyof(T)|null,foreignKey:keyof(T))
+        collection:string,
+        id:IdParam,
+        refCollection:string,
+        property:keyof(T)|null,
+        foreignKey:keyof(T),
+        endpoint?:string)
         :Promise<TRef|null>
     {
 
@@ -548,7 +572,15 @@ export default class ClientDb
             }
         }
 
-        return this.getObjRef<T,TRef>(collection,id,refCollection,property as string,foreignKey as string,false) as Promise<TRef|null>;
+        return this.getObjRef<T,TRef>(
+            collection,
+            id,
+            refCollection,
+            property as string,
+            foreignKey as string,
+            false,
+            undefined,
+            endpoint) as Promise<TRef|null>;
     }
 
     private async getObjRef<T,TRef>(
@@ -558,7 +590,8 @@ export default class ClientDb
         property:string,
         foreignKey:string,
         isCollection:boolean,
-        clearCache?:boolean)
+        clearCache?:boolean,
+        endpoint?:string)
         :Promise<TRef|TRef[]|null>
     {
         return this.syncAsync<TRef|TRef[]|null>(
@@ -584,7 +617,7 @@ export default class ClientDb
                 await this.deleteAsync(refFlag,id);
             }
 
-            const objResult=await this.http.getAsync<TRef[]|TRef>(this.getEndPoint(collection,id,property));
+            const objResult=await this.http.getAsync<TRef[]|TRef>(endpoint||this.getEndPoint(collection,id,property));
 
             if(!objResult){
                 return null;

@@ -15,7 +15,7 @@ export function useClientDb():ClientDb
  * Returns an object by id. Undefined is returned while the object is being loaded.
  * Null is returned if the object can not be found by any data providers
  */
-export function useObj<T>(collection:string,id:IdParam):T|null|undefined
+export function useObj<T>(collection:string,id:IdParam,endpoint?:string):T|null|undefined
 {
     const db=useClientDb();
 
@@ -25,7 +25,7 @@ export function useObj<T>(collection:string,id:IdParam):T|null|undefined
         let m=true;
         setObj(undefined);
         const get=async ()=>{
-            const obj=await db.getObjAsync<T>(collection,id);
+            const obj=await db.getObjAsync<T>(collection,id,endpoint);
             if(m){
                 setObj(obj);
             }
@@ -60,18 +60,18 @@ export function useObj<T>(collection:string,id:IdParam):T|null|undefined
             m=false;
             db.removeListener(listener);
         }
-    },[collection,id,db]);
+    },[collection,id,endpoint,db]);
 
     return obj;
 }
 
 export function useMappedObj<T>(
     enabled:boolean,
+    collection:string,
     endpoint:string,
     isCollection:boolean,
-    cacheKey:string|null,
-    cacheId:number|null,
-    collection:string)
+    cacheKey:string|null=null,
+    cacheId:number|null=null)
     :T|null|undefined
 {
     const db=useClientDb();
@@ -122,7 +122,8 @@ export function useObjCollectionRef<T,TRef>(
     id:IdParam,
     refCollection:string,
     property:keyof(T)|string,
-    foreignKey:keyof(TRef))
+    foreignKey:keyof(TRef),
+    endpoint?:string)
     :TRef[]|null|undefined
 {
     const db=useClientDb();
@@ -135,7 +136,8 @@ export function useObjCollectionRef<T,TRef>(
         let objs:TRef[]|null=null;
         let ids:string[]|null=null;
         const get=async (clearCache?:boolean)=>{
-            objs=await db.getObjRefCollection<T,TRef>(collection,id,refCollection,property,foreignKey,clearCache);
+            objs=await db.getObjRefCollection<T,TRef>(
+                collection,id,refCollection,property,foreignKey,clearCache,endpoint);
             ids=objs?.map(o=>db.getPrimaryKey(refCollection,o))||null;
             if(m){
                 setObj(objs);
@@ -174,7 +176,7 @@ export function useObjCollectionRef<T,TRef>(
             m=false;
             db.removeListener(listener);
         }
-    },[collection,id,db,refCollection,property,foreignKey]);
+    },[collection,id,db,refCollection,property,foreignKey,endpoint]);
 
     return obj;
 }
@@ -186,7 +188,8 @@ export function useObjSingleRef<T,TRef>(
     id:IdParam,
     refCollection:string,
     property:keyof(T)|null,
-    foreignKey:keyof(T))
+    foreignKey:keyof(T),
+    endpoint?:string)
     :TRef|null|undefined
 {
     const db=useClientDb();
@@ -199,7 +202,8 @@ export function useObjSingleRef<T,TRef>(
         let rObj:TRef|null=null;
         let pk:string|null=null;
         const get=async ()=>{
-            rObj=await db.getObjRefSingle<T,TRef>(collection,id,refCollection,property,foreignKey);
+            rObj=await db.getObjRefSingle<T,TRef>(
+                collection,id,refCollection,property,foreignKey,endpoint);
             pk=db.getPrimaryKey(refCollection,rObj);
             if(m){
                 setObj(rObj);
@@ -242,7 +246,7 @@ export function useObjSingleRef<T,TRef>(
             m=false;
             db.removeListener(listener);
         }
-    },[collection,id,db,refCollection,property,foreignKey]);
+    },[collection,id,db,refCollection,property,foreignKey,endpoint]);
 
     return obj;
 }
