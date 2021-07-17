@@ -5,6 +5,7 @@ import React from "react";
 import { FileSystem } from "react-native-unimodules";
 
 const dbSchemaVersion='1';
+const dbDataStructure='1';
 
 const toKey=(collection:string,id:string|number)=>collection+':'+id;
 
@@ -65,6 +66,11 @@ export default class ClientDb
             )
         `);
 
+        const committed=await this.getSettingAsync('settingsCommitted');
+        if(committed!=='1'){
+            await this.execAsync('DELETE FROM "settings"');
+        }
+
         const sv=await this.getSettingAsync('dbSchemaVersion');
         if(sv!==dbSchemaVersion){
             console.log(`Updating ClientDb dbSchemaVersion. ${sv||'(none)'} -> ${dbSchemaVersion}`)
@@ -84,8 +90,20 @@ export default class ClientDb
             CREATE UNIQUE INDEX IF NOT EXISTS "objsIndex" ON "objs" ( "objId", "collection")
         `]);
 
-        if(sv!==dbSchemaVersion){
+        const ds=await this.getSettingAsync('dbDataStructure');
+        if(ds!==dbDataStructure){
+            console.log(`Updating ClientDb dbDataStructure. ${ds||'(none)'} -> ${dbDataStructure}`)
+            await this.execAsync('DELETE FROM "objs"');
+            await this.nonTransactionalExecAsync('VACUUM');
+
+        }
+
+        // Commit settings
+        if(sv!==dbSchemaVersion || ds!==dbDataStructure){
+            await this.setSettingAsync('settingsCommitted','0');
             await this.setSettingAsync('dbSchemaVersion',dbSchemaVersion);
+            await this.setSettingAsync('dbDataStructure',dbDataStructure);
+            await this.setSettingAsync('settingsCommitted','1');
         }
     }
 
