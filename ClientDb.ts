@@ -460,10 +460,11 @@ export default class ClientDb
         isCollection:boolean,
         cacheKey:string,
         cacheId:number,
-        collection:string):Promise<T|null>
+        collection:string,
+        noCache:boolean=false):Promise<T|null>
     {
 
-        const cached=await this.findLocalRecordAsync(cacheKey,cacheId);
+        const cached=noCache?undefined:await this.findLocalRecordAsync(cacheKey,cacheId);
         if(cached && !isExpired(cached)){
 
             if(isCollection){

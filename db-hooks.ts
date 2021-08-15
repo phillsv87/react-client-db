@@ -65,13 +65,25 @@ export function useObj<T>(collection:string,id:IdParam,endpoint?:string):T|null|
     return obj;
 }
 
+/**
+ *
+ * @param enabled
+ * @param collection
+ * @param endpoint
+ * @param isCollection
+ * @param cacheKey
+ * @param cacheId
+ * @param resetOnAnyCollectionChange If true any change to the given collection will cause the data source to be refreshed
+ * @returns
+ */
 export function useMappedObj<T>(
     enabled:boolean,
     collection:string,
     endpoint:string,
     isCollection:boolean,
     cacheKey:string|null=null,
-    cacheId:number|null=null)
+    cacheId:number|null=null,
+    resetOnAnyCollectionChange:boolean|null=null)
     :T|null|undefined
 {
     const db=useClientDb();
@@ -84,15 +96,15 @@ export function useMappedObj<T>(
         }
         let m=true;
         setObj(undefined);
-        const get=async ()=>{
-            const obj=await db.getMappedObj<T>(endpoint,isCollection,cacheKey||'MAPPED:'+endpoint,cacheId||1,collection);
+        const get=async (noCache:boolean)=>{
+            const obj=await db.getMappedObj<T>(endpoint,isCollection,cacheKey||'MAPPED:'+endpoint,cacheId||1,collection,noCache);
             if(m){
                 setObj(obj);
             }
         };
-        get();
+        get(false);
 
-        const listener=(type:ObjEventType)=>{
+        const listener=(type:ObjEventType,eCollection:string)=>{
             if(!m){
                 return;
             }
@@ -100,9 +112,15 @@ export function useMappedObj<T>(
                 setObj(undefined);
             }else if(type==='resetAll'){
                 setObj(undefined);
-                get();
+                get(false);
+            }else if(eCollection===collection && resetOnAnyCollectionChange){// (this).{fKey} -> baseObj.Id
+                if(type==='delete'){
+                    setObj(undefined);
+                }else if(type==='reset'){
+                    get(true);
+                }
             }
-            // todo - maybe do something here
+            // todo - maybe do something more here
         }
 
         db.addListener(listener);
@@ -112,7 +130,7 @@ export function useMappedObj<T>(
             m=false;
             db.removeListener(listener);
         }
-    },[enabled,endpoint,isCollection,cacheKey,cacheId,collection,db]);
+    },[enabled,endpoint,isCollection,cacheKey,resetOnAnyCollectionChange,cacheId,collection,db]);
 
     return obj;
 }
