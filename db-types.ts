@@ -27,7 +27,8 @@ export interface DbConfig
     databaseName?:string;
     crudPrefix?:string;
     primaryKey?:string;
-    getPrimaryKey?:((collection:string)=>string)|null;
+    getPrimaryKey?:((collection:string,obj:any)=>string|null)|null;
+    primaryKeyMap?:{[collection:string]:string}|null;
     endPointMap?:{[collection:string]:string|EndPointBuilder};
     collectionRelations?:DbCollectionRelation[];
 }

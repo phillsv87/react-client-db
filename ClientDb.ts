@@ -14,6 +14,7 @@ const defaultConfig:Required<DbConfig>={
     crudPrefix:'',
     primaryKey:'Id',
     getPrimaryKey:null,
+    primaryKeyMap:null,
     endPointMap:{},
     collectionRelations:[]
 }
@@ -125,10 +126,12 @@ export default class ClientDb
         for(const l of this.listeners){
             l(type,collection,id,obj,includeRef);
         }
-        for(const r of this.config.collectionRelations){
-            if(r.depCollection===collection){
-                if(r.resetAll){
-                    this.removeAllRecordsNextFrame(r.collection);
+        if(type==='reset' || type==='delete' || type==='resetCollection'){
+            for(const r of this.config.collectionRelations){
+                if(r.depCollection===collection){
+                    if(r.resetAll){
+                        this.removeAllRecordsNextFrame(r.collection);
+                    }
                 }
             }
         }
@@ -172,7 +175,15 @@ export default class ClientDb
         if(!obj){
             return '';
         }
-        const key=obj[this.config.getPrimaryKey?this.config.getPrimaryKey(collection):this.config.primaryKey];
+        let key:string|null|undefined;
+        if(this.config.getPrimaryKey){
+            key=this.config.getPrimaryKey(collection,obj);
+            if(key!==null && key!==undefined){
+                return key;
+            }
+        }
+        const mapped=this.config.primaryKeyMap?.[collection];
+        key=obj[mapped||this.config.primaryKey];
         if(key===null || key===undefined){
             return '';
         }
