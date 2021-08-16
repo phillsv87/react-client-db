@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import ClientDb, { ClientDbContext } from "./ClientDb";
 import { IdParam, ObjEventType } from "./db-types";
 
@@ -40,7 +40,8 @@ export function useObj<T>(collection:string,id:IdParam,endpoint?:string):T|null|
             if(type==='clearAll'){
                 setObj(undefined);
             }else if(type==='resetAll'){
-                setObj(undefined);
+                get();
+            }else if(type==='resetCollection' && eCollection===collection){
                 get();
             }else if(eCollection===collection && eId===strId){
                 if(type==='set'){
@@ -73,7 +74,6 @@ export function useObj<T>(collection:string,id:IdParam,endpoint?:string):T|null|
  * @param isCollection
  * @param cacheKey
  * @param cacheId
- * @param resetOnAnyCollectionChange If true any change to the given collection will cause the data source to be refreshed
  * @returns
  */
 export function useMappedObj<T>(
@@ -82,8 +82,7 @@ export function useMappedObj<T>(
     endpoint:string,
     isCollection:boolean,
     cacheKey:string|null=null,
-    cacheId:number|null=null,
-    resetOnAnyCollectionChange:boolean|null=null)
+    cacheId:number|null=null)
     :T|null|undefined
 {
     const db=useClientDb();
@@ -94,15 +93,16 @@ export function useMappedObj<T>(
         if(!enabled){
             return;
         }
+
         let m=true;
         setObj(undefined);
-        const get=async (noCache:boolean)=>{
-            const obj=await db.getMappedObj<T>(endpoint,isCollection,cacheKey||'MAPPED:'+endpoint,cacheId||1,collection,noCache);
+        const get=async ()=>{
+            const obj=await db.getMappedObj<T>(endpoint,isCollection,cacheKey||'MAPPED:'+endpoint,cacheId||-1,collection);
             if(m){
                 setObj(obj);
             }
         };
-        get(false);
+        get();
 
         const listener=(type:ObjEventType,eCollection:string)=>{
             if(!m){
@@ -111,14 +111,9 @@ export function useMappedObj<T>(
             if(type==='clearAll'){
                 setObj(undefined);
             }else if(type==='resetAll'){
-                setObj(undefined);
-                get(false);
-            }else if(eCollection===collection && resetOnAnyCollectionChange){// (this).{fKey} -> baseObj.Id
-                if(type==='delete'){
-                    setObj(undefined);
-                }else if(type==='reset'){
-                    get(true);
-                }
+                get();
+            }else if(type==='resetCollection' && eCollection===collection){
+                get();
             }
             // todo - maybe do something more here
         }
@@ -130,7 +125,7 @@ export function useMappedObj<T>(
             m=false;
             db.removeListener(listener);
         }
-    },[enabled,endpoint,isCollection,cacheKey,resetOnAnyCollectionChange,cacheId,collection,db]);
+    },[enabled,endpoint,isCollection,collection,cacheKey,cacheId,db]);
 
     return obj;
 }
@@ -172,7 +167,8 @@ export function useObjCollectionRef<T,TRef>(
             if(type==='clearAll'){
                 setObj(undefined);
             }else if(type==='resetAll'){
-                setObj(undefined);
+                get();
+            }else if(type==='resetCollection' && eCollection===collection){
                 get();
             }else if(eCollection===collection && eId===strId){// (this).{fKey} -> baseObj.Id
                 if(type==='delete'){
@@ -237,7 +233,8 @@ export function useObjSingleRef<T,TRef>(
             if(type==='clearAll'){
                 setObj(undefined);
             }else if(type==='resetAll'){
-                setObj(undefined);
+                get();
+            }else if(type==='resetCollection' && eCollection===collection){
                 get();
             }else if(eCollection===collection && eId===strId){// baseObj.{fKey} -> (this).Id
                 if(type==='set' || type==='reset'){

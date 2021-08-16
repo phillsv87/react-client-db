@@ -14,7 +14,8 @@ const defaultConfig:Required<DbConfig>={
     crudPrefix:'',
     primaryKey:'Id',
     getPrimaryKey:null,
-    endPointMap:{}
+    endPointMap:{},
+    collectionRelations:[]
 }
 
 interface LoadedRef{
@@ -123,6 +124,13 @@ export default class ClientDb
     private callListeners(type:ObjEventType,collection:string,id:string,obj:any,includeRef:boolean){
         for(const l of this.listeners){
             l(type,collection,id,obj,includeRef);
+        }
+        for(const r of this.config.collectionRelations){
+            if(r.depCollection===collection){
+                if(r.resetAll){
+                    this.removeAllRecordsNextFrame(r.collection);
+                }
+            }
         }
     }
 
@@ -320,6 +328,36 @@ export default class ClientDb
             release();
         }
         this.callListeners(type,collection,id.toString(),obj,includeRefs);
+    }
+
+    private async removeAllRecordsNextFrame(collection:string)
+    {
+        setTimeout(()=>{
+            this.removeAllRecordsAsync(collection);
+        },1)
+    }
+
+    private async removeAllRecordsAsync(collection:string):Promise<void>
+    {
+
+        const release=await this.writeLock.waitAsync();
+        try{
+            await this.execAsync(
+                'DELETE FROM "objs" WHERE "collection" = ?',
+                [collection]
+            )
+
+            for(const e in this.memCache){
+                const record=this.memCache[e];
+                if(record.collection===collection){
+                    delete this.memCache[e];
+                }
+            }
+
+        }finally{
+            release();
+        }
+        this.callListeners('resetCollection',collection,'(all)',undefined,false);
     }
 
     public resetAllAsync():Promise<void>

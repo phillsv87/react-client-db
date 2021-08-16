@@ -15,6 +15,13 @@ export interface IHttp
 
 export type EndPointBuilder=(collection:string,id:IdParam)=>string;
 
+export interface DbCollectionRelation
+{
+    collection:string;
+    depCollection:string;
+    resetAll?:boolean;
+}
+
 export interface DbConfig
 {
     databaseName?:string;
@@ -22,6 +29,7 @@ export interface DbConfig
     primaryKey?:string;
     getPrimaryKey?:((collection:string)=>string)|null;
     endPointMap?:{[collection:string]:string|EndPointBuilder};
+    collectionRelations?:DbCollectionRelation[];
 }
 
 export interface DbRecord
@@ -63,7 +71,11 @@ export type ObjEventType=
 
     // All objects were cleared but should not be retrieved from their data source.
     // This is a utility event used to clear the cache db.
-    'clearAll';
+    'clearAll'|
+
+    // Resets all objects in a collection. objects with a matching collection should be
+    // retrieved from their data source
+    'resetCollection';
 
 export type ObjListener=(type:ObjEventType,collection:string,id:string,obj:any,includeRefs:boolean)=>void;
 
