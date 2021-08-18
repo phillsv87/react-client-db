@@ -31,6 +31,7 @@ export interface DbConfig
     primaryKeyMap?:{[collection:string]:string}|null;
     endPointMap?:{[collection:string]:string|EndPointBuilder};
     collectionRelations?:DbCollectionRelation[];
+    defaultTTLMinutes?:number;
 }
 
 export interface DbRecord

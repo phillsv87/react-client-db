@@ -16,7 +16,8 @@ const defaultConfig:Required<DbConfig>={
     getPrimaryKey:null,
     primaryKeyMap:null,
     endPointMap:{},
-    collectionRelations:[]
+    collectionRelations:[],
+    defaultTTLMinutes:60*24//one day
 }
 
 interface LoadedRef{
@@ -107,6 +108,14 @@ export default class ClientDb
             await this.setSettingAsync('dbDataStructure',dbDataStructure);
             await this.setSettingAsync('settingsCommitted','1');
         }
+    }
+
+    private getExpires(ttl?:number)
+    {
+        if(ttl===undefined){
+            ttl=this.config.defaultTTLMinutes*60*1000;
+        }
+        return new Date().getTime()+ttl;
     }
 
     public addListener(listener:ObjListener)
@@ -444,7 +453,7 @@ export default class ClientDb
     public async setAsync(collection:string,obj:any):Promise<void>
     {
         await this.setRecordsAsync([{
-            expires:0,
+            expires:this.getExpires(),
             collection,
             refCollection:null,
             objId:this.getPrimaryKey(collection,obj),
@@ -493,7 +502,7 @@ export default class ClientDb
             const obj=await this.http.getAsync<T>(endpoint||this.getEndPoint(collection,id));
 
             await this.setRecordsAsync([{
-                expires:0,
+                expires:this.getExpires(),
                 collection,
                 refCollection:null,
                 objId:id.toString(),
@@ -543,7 +552,7 @@ export default class ClientDb
             for(const o of ary){
                 const id=this.getPrimaryKey(collection,o);
                 records.push({
-                    expires:0,
+                    expires:this.getExpires(),
                     collection:collection,
                     refCollection:null,
                     objId:id,
@@ -554,7 +563,7 @@ export default class ClientDb
         }else{
             const id=this.getPrimaryKey(collection,obj);
             records.push({
-                expires:0,
+                expires:this.getExpires(),
                 collection:collection,
                 refCollection:null,
                 objId:id,
@@ -568,7 +577,7 @@ export default class ClientDb
             ids
         }
         records.push({
-            expires:0,
+            expires:this.getExpires(),
             collection:cacheKey,
             refCollection:collection,
             objId:cacheId.toString(),
@@ -680,7 +689,7 @@ export default class ClientDb
 
             const records:DbMemRecord[]=isAry?
                 (objResult as TRef[]).map<DbMemRecord>(obj=>({
-                    expires:0,
+                    expires:this.getExpires(),
                     collection:refCollection,
                     refCollection:null,
                     objId:this.getPrimaryKey(refCollection,obj),
@@ -688,7 +697,7 @@ export default class ClientDb
                 }))
             :
                 [{
-                    expires:0,
+                    expires:this.getExpires(),
                     collection:refCollection,
                     refCollection:null,
                     objId:this.getPrimaryKey(refCollection,objResult),
@@ -701,7 +710,7 @@ export default class ClientDb
             }
 
             records.push({
-                expires:0,
+                expires:this.getExpires(),
                 collection:refFlag,
                 refCollection:collection,
                 objId:id.toString(),
