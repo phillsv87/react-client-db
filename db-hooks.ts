@@ -1,6 +1,6 @@
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import ClientDb, { ClientDbContext } from "./ClientDb";
-import { IdParam, ObjEventType } from "./db-types";
+import { IdParam, ObjEventType, PauseHook } from "./db-types";
 
 export function useClientDb():ClientDb
 {
@@ -20,10 +20,17 @@ export function useObj<T>(collection:string,id:IdParam,endpoint?:string):T|null|
     const db=useClientDb();
 
     const [obj,setObj]=useState<T|null|undefined>(undefined);
+    const hasPaused=useRef(false);
 
     useEffect(()=>{
+        if(id===PauseHook){
+            hasPaused.current=true;
+            return;
+        }
         let m=true;
-        setObj(undefined);
+        if(!hasPaused.current){
+            setObj(undefined);
+        }
         const get=async ()=>{
             const obj=await db.getObjAsync<T>(collection,id,endpoint);
             if(m){
@@ -142,10 +149,17 @@ export function useObjCollectionRef<T,TRef>(
     const db=useClientDb();
 
     const [obj,setObj]=useState<TRef[]|null|undefined>(undefined);
+    const hasPaused=useRef(false);
 
     useEffect(()=>{
+        if(id===PauseHook){
+            hasPaused.current=true;
+            return;
+        }
         let m=true;
-        setObj(undefined);
+        if(!hasPaused.current){
+            setObj(undefined);
+        }
         let objs:TRef[]|null=null;
         let ids:string[]|null=null;
         const get=async (clearCache?:boolean)=>{
@@ -209,10 +223,17 @@ export function useObjSingleRef<T,TRef>(
     const db=useClientDb();
 
     const [obj,setObj]=useState<TRef|null|undefined>(undefined);
+    const hasPaused=useRef(false);
 
     useEffect(()=>{
+        if(id===PauseHook){
+            hasPaused.current=true;
+            return;
+        }
         let m=true;
-        setObj(undefined);
+        if(!hasPaused.current){
+            setObj(undefined);
+        }
         let rObj:TRef|null=null;
         let pk:string|null=null;
         const get=async ()=>{

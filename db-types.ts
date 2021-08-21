@@ -1,3 +1,7 @@
+export const SpecialIdPrefix='::SPECIAL::ID::';
+
+export const PauseHook=SpecialIdPrefix+'PauseHook';
+
 export type IdParam=number|string|null|undefined;
 
 export interface IHttp
