@@ -363,13 +363,13 @@ export default class ClientDb
         const release=await this.writeLock.waitAsync();
         try{
             await this.execAsync(
-                'DELETE FROM "objs" WHERE "collection" = ?',
-                [collection]
+                'DELETE FROM "objs" WHERE "collection" = ? OR "refCollection" = ?',
+                [collection,collection]
             )
 
             for(const e in this.memCache){
                 const record=this.memCache[e];
-                if(record.collection===collection){
+                if(record.collection===collection || record.refCollection===collection){
                     delete this.memCache[e];
                 }
             }
