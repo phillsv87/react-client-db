@@ -135,7 +135,7 @@ export default class ClientDb
         for(const l of this.listeners){
             l(type,collection,id,obj,includeRef);
         }
-        if(type==='reset' || type==='delete' || type==='resetCollection'){
+        if(type==='reset' || type==='update' || type==='delete' || type==='resetCollection'){
             for(const r of this.config.collectionRelations){
                 if(r.depCollection===collection){
                     if(r.resetAll){
@@ -260,7 +260,7 @@ export default class ClientDb
         });
     }
 
-    private async setRecordsAsync(records:DbMemRecord[]):Promise<void>
+    private async setRecordsAsync(evtType:'set'|'update', records:DbMemRecord[]):Promise<void>
     {
 
         const release=await this.writeLock.waitAsync();
@@ -293,7 +293,7 @@ export default class ClientDb
             release();
         }
         for(const record of records){
-            this.callListeners('set',record.collection,record.objId,record.obj,false);
+            this.callListeners(evtType,record.collection,record.objId,record.obj,false);
         }
     }
 
@@ -452,7 +452,7 @@ export default class ClientDb
 
     public async setAsync(collection:string,obj:any):Promise<void>
     {
-        await this.setRecordsAsync([{
+        await this.setRecordsAsync('set',[{
             expires:this.getExpires(),
             collection,
             refCollection:null,
@@ -472,6 +472,35 @@ export default class ClientDb
     public updateAsync(collection:string,id:IdParam,includeRefs:boolean=false):Promise<void>
     {
         return this.removeRecordAsync(collection,id,includeRefs,'reset');
+    }
+
+    public async updateInPlaceAsync<T>(collection:string,id:IdParam,update:(obj:T,collection:string,id:IdParam)=>T|null):Promise<T|null>
+    {
+
+        const cached=await this.findLocalRecordAsync(collection,id);
+        if(!cached || isExpired(cached)){
+            return null;
+        }
+
+        const obj=update(cached.obj,collection,id);
+        if(obj===null){
+            return null;
+        }
+        if(obj===cached.obj){
+            throw new Error(
+                'updateInPlaceAsync updated should return a new copy of the target object. '+
+                'Collection:'+collection+', id:'+id);
+        }
+
+        await this.setRecordsAsync('update',[{
+            expires:cached.expires,
+            collection,
+            refCollection:cached.refCollection,
+            objId:this.getPrimaryKey(collection,obj),
+            obj:obj
+        }]);
+
+        return obj;
     }
 
     public deleteAsync(collection:string,id:IdParam):Promise<void>
@@ -501,7 +530,7 @@ export default class ClientDb
 
             const obj=await this.http.getAsync<T>(endpoint||this.getEndPoint(collection,id));
 
-            await this.setRecordsAsync([{
+            await this.setRecordsAsync('set',[{
                 expires:this.getExpires(),
                 collection,
                 refCollection:null,
@@ -571,7 +600,7 @@ export default class ClientDb
             })
             ids.push(id);
         }
-            await this.setRecordsAsync(records);
+            await this.setRecordsAsync('set',records);
 
         const idRef:DbRecordRef={
             ids
@@ -584,7 +613,7 @@ export default class ClientDb
             obj:idRef
         });
 
-        await this.setRecordsAsync(records);
+        await this.setRecordsAsync('set',records);
 
 
         return obj||null;
@@ -717,7 +746,7 @@ export default class ClientDb
                 obj:collectionRef
             });
 
-            await this.setRecordsAsync(records)
+            await this.setRecordsAsync('set',records)
 
             return objResult||null;
         });
@@ -804,7 +833,7 @@ export default class ClientDb
                     map[item.objId]=record.obj;
                     count++;
                 }
-                await this.setRecordsAsync(records);
+                await this.setRecordsAsync('set',records);
             }
         }
 
@@ -889,7 +918,7 @@ export default class ClientDb
                         map[item.objId]=record.obj;
                         count++;
                     }
-                    await this.setRecordsAsync(records);
+                    await this.setRecordsAsync('set',records);
                 }
             }
 

@@ -66,6 +66,9 @@ export type ObjEventType=
     // An object was set
     'set'|
 
+    // An object has been updated in place
+    'update'|
+
     // An object was reset and should be retrieved from its data source
     'reset'|
 

@@ -51,7 +51,7 @@ export function useObj<T>(collection:string,id:IdParam,endpoint?:string):T|null|
             }else if(type==='resetCollection' && eCollection===collection){
                 get();
             }else if(eCollection===collection && eId===strId){
-                if(type==='set'){
+                if(type==='set' || type==='update'){
                     setObj(obj);
                 }else if(type==='reset'){
                     get();
@@ -258,14 +258,14 @@ export function useObjSingleRef<T,TRef>(
             }else if(type==='resetCollection' && eCollection===collection){
                 get();
             }else if(eCollection===collection && eId===strId){// baseObj.{fKey} -> (this).Id
-                if(type==='set' || type==='reset'){
+                if(type==='set' || type==='reset' || type==='update'){
                     // fKey could have changed to do full refresh
                     get();
                 }else if(type==='delete'){
                     setObj(undefined);
                 }
             }else if(eCollection===refCollection && pk===eId){
-                if(type==='set'){
+                if(type==='set' || type==='update'){
                     setObj(obj);
                 }else if(type==='reset'){
                     get();
