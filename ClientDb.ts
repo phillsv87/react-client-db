@@ -5,7 +5,7 @@ import React from "react";
 import { FileSystem } from "react-native-unimodules";
 
 const dbSchemaVersion='1';
-const dbDataStructure='2';
+const dbDataStructure='3';
 
 const toKey=(collection:string,id:string|number)=>collection+':'+id;
 
