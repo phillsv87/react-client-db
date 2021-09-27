@@ -4,7 +4,7 @@ import { ResultSet, ResultSetError, SQLError, SQLResultSet, SQLTransaction, WebS
 import React from "react";
 import { FileSystem } from "react-native-unimodules";
 
-const dbSchemaVersion='1';
+const dbSchemaVersion='2';
 const dbDataStructure='3';
 
 const toKey=(collection:string,id:string|number)=>collection+':'+id;
@@ -277,7 +277,7 @@ export default class ClientDb
 
                 if(c.rows?.item(0)?.count){
                     await this.execAsync(
-                        'UPDATE "objs" SET "expires" = ?, "obj" = ? WHERE "objId" = ? AND "collection" = ? LIMIT 1',
+                        'UPDATE "objs" SET "expires" = ?, "obj" = ? WHERE "objId" = ? AND "collection" = ?',
                         [record.expires,JSON.stringify(record.obj),record.objId,record.collection]
                     )
                 }else{
@@ -316,7 +316,7 @@ export default class ClientDb
                 )
             }else{
                 await this.execAsync(
-                    'DELETE FROM "objs" WHERE "objId" = ? AND "collection" = ? LIMIT 1',
+                    'DELETE FROM "objs" WHERE "objId" = ? AND "collection" = ?',
                     [id.toString(),collection]
                 )
             }
