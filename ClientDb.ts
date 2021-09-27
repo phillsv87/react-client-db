@@ -1,10 +1,9 @@
-import { DbConfig, DbMemRecord, DbRecord, DbRecordRef, IdParam, IHttp, ObjEventType, ObjListener } from "./db-types";
-import * as SQLite from 'expo-sqlite';
-import { ResultSet, ResultSetError, SQLError, SQLResultSet, SQLTransaction, WebSQLDatabase } from "expo-sqlite";
+import { DatabaseAdapter, DbConfig, DbMemRecord, DbRecord, DbRecordRef, IdParam, IHttp, ObjEventType, ObjListener } from "./db-types";
 import React from "react";
 import { FileSystem } from "react-native-unimodules";
+import { ResultSet, ResultSetError, SQLError, SQLResultSet, SQLTransaction, WebSQLDatabase } from "./sqlite-types";
 
-const dbSchemaVersion='2';
+const dbSchemaVersion='3';
 const dbDataStructure='3';
 
 const toKey=(collection:string,id:string|number)=>collection+':'+id;
@@ -42,6 +41,8 @@ export default class ClientDb
 
     private readonly config:Required<DbConfig>;
 
+    private readonly openDatabase:DatabaseAdapter;
+
     private __db:WebSQLDatabase|null=null;
     private get db():WebSQLDatabase{
         if(!this.__db){
@@ -52,15 +53,16 @@ export default class ClientDb
 
 
 
-    public constructor(http:IHttp,config?:DbConfig)
+    public constructor(http:IHttp,config:DbConfig|null,openDatabase:DatabaseAdapter)
     {
         this.http=http;
-        this.config={...defaultConfig,...config};
+        this.config={...defaultConfig,...(config||{})};
+        this.openDatabase=openDatabase;
     }
 
     public async initAsync()
     {
-        this.__db=SQLite.openDatabase(this.config.databaseName);
+        this.__db=this.openDatabase(this.config);
 
         await this.execAsync(`
             CREATE TABLE IF NOT EXISTS "settings"(
@@ -200,10 +202,18 @@ export default class ClientDb
     }
 
 
-    private nonTransactionalExecAsync(sql:string,args?:any[],readOnly:boolean=false):Promise<(ResultSetError|ResultSet)[]|undefined>
+    private async nonTransactionalExecAsync(sql:string,args?:any[],readOnly:boolean=false):Promise<(ResultSetError|ResultSet)[]|undefined>
     {
-        return new Promise<(ResultSetError|ResultSet)[]|undefined>((success,error)=>{
-            this.db.exec([{sql,args:args||[]}],readOnly,(err,r)=>{
+        const db=this.db;
+        if(!db.exec){
+            return;
+        }
+        return await new Promise<(ResultSetError|ResultSet)[]|undefined>((success,error)=>{
+            if(!db.exec){
+                error('exec not implemented');
+                return;
+            }
+            db.exec([{sql,args:args||[]}],readOnly,(err,r)=>{
                 if(err){
                     error(err);
                 }else{

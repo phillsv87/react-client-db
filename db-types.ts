@@ -1,3 +1,5 @@
+import { WebSQLDatabase } from "./sqlite-types";
+
 export const SpecialIdPrefix='::SPECIAL::ID::';
 
 export const PauseHook=SpecialIdPrefix+'PauseHook';
@@ -93,3 +95,5 @@ export interface DbSettingRecord
     name:string;
     value:string;
 }
+
+export type DatabaseAdapter=(config:Required<DbConfig>)=>WebSQLDatabase;
