@@ -1,6 +1,5 @@
 import { DatabaseAdapter, DbConfig, DbMemRecord, DbRecord, DbRecordRef, IdParam, IHttp, ObjEventType, ObjListener } from "./db-types";
 import React from "react";
-import { FileSystem } from "react-native-unimodules";
 import { ResultSet, ResultSetError, SQLError, SQLResultSet, SQLTransaction, WebSQLDatabase } from "./sqlite-types";
 
 const dbSchemaVersion='3';
@@ -110,6 +109,11 @@ export default class ClientDb
             await this.setSettingAsync('dbDataStructure',dbDataStructure);
             await this.setSettingAsync('settingsCommitted','1');
         }
+    }
+
+    public getConfig():Required<DbConfig>
+    {
+        return {...this.config}
     }
 
     private getExpires(ttl?:number)
@@ -981,11 +985,6 @@ export default class ClientDb
 
         const child=await this.findLocalRecordAsync(refCollection,fKey);
         return child?.obj||null;
-    }
-
-    public getDbFilePath()
-    {
-        return `${FileSystem.documentDirectory}/SQLite/${this.config.databaseName}`;
     }
 
 }
