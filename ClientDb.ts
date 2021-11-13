@@ -1043,3 +1043,20 @@ class Lock
         }
     }
 }
+
+export interface IDomain
+{
+    setDb:(db:ClientDb)=>void;
+}
+
+export class ClientDbDomain<T extends IDomain> extends ClientDb
+{
+    public readonly domain:T;
+
+    public constructor(http:IHttp,config:DbConfig|null,openDatabase:DatabaseAdapter,domain:T)
+    {
+        super(http,config,openDatabase);
+        this.domain=domain;
+        domain.setDb(this);
+    }
+}
