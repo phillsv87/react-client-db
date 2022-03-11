@@ -1,5 +1,5 @@
-import { DatabaseAdapter, DbConfig, DbMemRecord, DbRecord, DbRecordRef, IdParam, IHttp, ObjEventType, ObjListener } from "./db-types";
 import React from "react";
+import { DatabaseAdapter, DbConfig, DbMemRecord, DbRecord, DbRecordRef, IdParam, IHttp, ObjEventType, ObjListener } from "./db-types";
 import { ResultSet, ResultSetError, SQLError, SQLResultSet, SQLTransaction, WebSQLDatabase } from "./sqlite-types";
 
 const dbSchemaVersion='3';
@@ -77,7 +77,7 @@ export default class ClientDb
 
         const sv=await this.getSettingAsync('dbSchemaVersion');
         if(sv!==dbSchemaVersion){
-            console.log(`Updating ClientDb dbSchemaVersion. ${sv||'(none)'} -> ${dbSchemaVersion}`)
+            console.debug(`Updating ClientDb dbSchemaVersion. ${sv||'(none)'} -> ${dbSchemaVersion}`)
             await this.execAsync('DROP TABLE IF EXISTS "objs"');
         }
 
@@ -96,7 +96,7 @@ export default class ClientDb
 
         const ds=await this.getSettingAsync('dbDataStructure');
         if(ds!==dbDataStructure){
-            console.log(`Updating ClientDb dbDataStructure. ${ds||'(none)'} -> ${dbDataStructure}`)
+            console.debug(`Updating ClientDb dbDataStructure. ${ds||'(none)'} -> ${dbDataStructure}`)
             await this.execAsync('DELETE FROM "objs"');
             await this.nonTransactionalExecAsync('VACUUM');
 
@@ -247,7 +247,7 @@ export default class ClientDb
                 }
             },
             (err:SQLError)=>{
-                console.log('execAsync error',exec,args)
+                console.debug('execAsync error',exec,args)
                 error(err.message+' - code:'+err.code);
             },
             success)
